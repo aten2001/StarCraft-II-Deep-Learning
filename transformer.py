@@ -175,3 +175,77 @@ class DecoderLayer(nn.Module):
         x2 - self.norm_3(x)
         x = x + self.dropout_3(self.ff(x2))
         return x
+
+
+class Encoder(nn.Module):
+    def __init__(self, vocab_size, d_model, N, heads):
+        super().__init__()
+        self.N = N
+        self.embed = Embedder(vocab_size, d_model)
+        self.pe = PositionalEncoder(d_model)
+        self.layers = get_clones(EncoderLayer(d_model, heads), N)
+        self.norm = Norm(d_model)
+
+    def forward(self, src, mask):
+        x = self.embed(src)
+        x = self.pe(x)
+        for i in range(self.N):
+            x = self.layers[i](x, mask)
+        return self.norm(x)
+
+
+class Decoder(nn.Module):
+    def __init__(self, vocab_size, d_model, N, heads):
+        super().__init__()
+        self.N = N
+        self.embed = Embedder(vocab_size, d_model)
+        self.pe = PositionalEncoder(d_model)
+        self.layers = get_clones(DecoderLayer(d_model, heads), N)
+        self.norm = Norm(d_model)
+
+    def forward(self, trg, e_outputs, src_mask, trg_mask):
+        x = self.embed(trg)
+        x = self.pe(x)
+        for i in range(self.N):
+            x = self.layers[i](x, e_outputs, src_mask, trg_mask)
+        return self.norm(x)
+
+
+class Transformer(nn.Module):
+    def __init__(self, src_vocab, trg_vocab, d_model, N, heads):
+        super().__init__()
+        self.encoder = Encoder(src_vocab, d_model, N, heads)
+        self.decoder = Decoder(trg_vocab, d_model, N, heads)
+        self.out = nn.Linear(d_model, trg_vocab)
+
+    def forward(self, src, trg, src_mask, trg_mask):
+        e_outputs = self.encoder(src, src_mask)
+        d_outputs = self.decoder(trg, trg_mask)
+        output = self.out(d_outputs)
+        return output
+
+
+'''
+This part isn't done yet, I have to figure out how DeepMind trained a StarCraft agent with a transformer. In this
+implementation, it seems to be tailored to a supervised learning project. 
+
+
+def main():
+    d_model = 512
+    heads = 8
+    N = 6
+    src_vocab = len(EN_TEXT.vocab)
+    trg_vocab = len(FR_TEXT.vocab)
+    model = Transformer(src_vocab, trg_vocab, d_model, N, heads)
+    for p in model.parameters():
+        if p.dim() > 1:
+            nn.init.xavier_uniform_(p)
+    # this code is very important! It initialises the parameters with a
+    # range of values that stops the signal fading or getting too big.
+    # See this blog for a mathematical explanation.
+    optim = torch.optim.Adam(model.parameters(), lr=0.0001, betas=(0.9, 0.98), eps=1e-9)
+
+if __name__ == '__main__':
+    main()
+
+'''
