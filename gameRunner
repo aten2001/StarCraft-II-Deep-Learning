@@ -1,0 +1,4 @@
+#!/bin/bash
+
+python -m pysc2.bin.agent --map DefeatRoaches --agent agents.SmartAgent --agent_race terran --rgb_screen_size 84 \
+--rgb_minimap_size 64 --action_space FEATURES
