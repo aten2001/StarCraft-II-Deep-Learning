@@ -9,6 +9,7 @@ from pysc2.lib import actions
 from pysc2.lib import features
 
 from models import RelationalNN as relnn
+from models import ResNet, MLP
 
 
 '''
@@ -37,6 +38,8 @@ _TERRAN_BARRACKS = 21
 _NOT_QUEUED = [0]
 _QUEUED = [1]
 
+
+
 '''
 Agents
 '''
@@ -44,9 +47,19 @@ class SmartAgent(base_agent.BaseAgent):
     def step(self, obs):
         super(SmartAgent, self).step(obs)
 
-        pdb.set_trace()
-
+        # pdb.set_trace()
+        print(obs.observation['feature_minimap'].shape)
+        print(obs.observation['feature_screen'].shape)
+        print(obs.observation['last_actions'])
+        print(obs.observation['player'])
+        (minimap, screen, player, last_action) = self.input_preprocessing(obs.observation)
         return actions.FUNCTIONS.no_op()
 
+    def input_preprocessing(self, observation):
+        minimap = np.log(observation['feature_minimap'] + 1)
+        screen = np.log(observation['feature_screen'] + 1)
+        player = np.log(observation['player'] + 1)
+        last_action = observation['last_actions'] / 100
+        return (minimap, screen, player, last_action)
 
-
+    # def train(self):
