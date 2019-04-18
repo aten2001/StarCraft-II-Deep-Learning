@@ -14,7 +14,7 @@ def main():
     try:
         while True:
             with sc2_env.SC2Env(
-                map_name='DefeatRoaches',
+                map_name='Simple64',
                 players=[sc2_env.Agent(sc2_env.Race.terran)],
                 agent_interface_format=features.AgentInterfaceFormat(
                 feature_dimensions=features.Dimensions(screen=84, minimap=64),
