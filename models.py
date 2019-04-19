@@ -85,7 +85,7 @@ class SpatialResNet(nn.Module):
 class MemoryProcessing(nn.Module):
     def __init__(self, minimap_shape=(7, 64, 64), screen_shape=(17, 64, 64)):
         self.SpatialResNet = SpatialResNet()
-        self.ConvLSTM = ConvLSTM(ConvLSTM(input_channels=512, hidden_channels=[32], kernel_size=3)
+        self.ConvLSTM = ConvLSTM(input_channels=24, hidden_channels=[96], kernel_size=3)
 
     def forward(self, minimap, screen):
         input3d = self.SpatialResNet(minimap, screen)
