@@ -1,5 +1,9 @@
+import math
+import copy
+
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 import pandas as pd
 from ConvLSTM import ConvLSTM
@@ -108,6 +112,49 @@ class MLP(nn.Module):
         return out
 
 
+class MultiHeadAttention(nn.Module):
+    def attention(q, k, v, d_k, mask=None, dropout=None):
+        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(d_k)
+        if mask is not None:
+            mask = mask.unsqueeze(1)
+            scores = scores.masked_fill(mask == 0, -1e9)
+
+        scores = F.softmax(scores, dim=-1)
+        if dropout is not None:
+            scores = dropout(scores)
+
+        output = torch.matmul(scores, v)
+        return output
+
+    def __init__(self, heads, d_model, num_blocks):
+        super().__init__()
+
+        # self.d_model = d_model
+        # self.d_k = d_model // heads
+        self.h = heads
+        self.memory = MemoryProcessing()
+        self.output_mlp = nn.Sequential(
+            nn.Linear(),
+            nn.ReLU,
+            nn.Linear()
+        )
+
+    def forward(self, minimap, screen):
+        #batch_size = q.size(0)
+
+        outputs3d = self.memory(minimap_shape=minimap.shape, screen_shape=screen.shape)[0]
+        # Perform linear operation on slit into h heads
+        k = copy.deepcopy(outputs3d)
+        q = copy.deepcopy(outputs3d)
+        v = copy.deepcopy(outputs3d)
+
+        # Calculate attention
+        scores = self.attention(q, k, v, self.d_k)
+
+        # Concatenate heads and put through final linear layer
+        concat = scores.transpose(1, 2).contiguous().view(batch_size, -1, self.d_model)
+        output = self.out(concat)
+        return output
 
 
 
