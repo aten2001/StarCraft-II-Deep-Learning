@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import pandas as pd
+from ConvLSTM import ConvLSTM
 '''
 ResidualBlock and ResNet credit to https://github.com/yunjey/pytorch-tutorial/blob/master/tutorials/02-intermediate/deep_residual_network/main.py
 '''
@@ -81,6 +82,16 @@ class SpatialResNet(nn.Module):
         out = torch.cat((minimap, screen), 0)
         return out
 
+class MemoryProcessing(nn.Module):
+    def __init__(self, minimap_shape=(7, 64, 64), screen_shape=(17, 64, 64)):
+        self.SpatialResNet = SpatialResNet()
+        self.ConvLSTM = ConvLSTM(input_channels=24, hidden_channels=[96], kernel_size=3)
+
+    def forward(self, minimap, screen):
+        input3d = self.SpatialResNet(minimap, screen)
+        state = self.ConvLSTM(input3d)
+        return state
+
 
 
 class MLP(nn.Module):
@@ -90,10 +101,12 @@ class MLP(nn.Module):
           torch.nn.ReLU(),
           torch.nn.Linear(128, 64),
         )
+
     def forward(self, player, last_action):
         x = np.concatenate((player, last_action))
         out = self.mlp(x)
         return out
+
 
 
 
