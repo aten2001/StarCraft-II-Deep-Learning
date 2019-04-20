@@ -77,6 +77,7 @@ class ResNet(nn.Module):
 
 class SpatialResNet(nn.Module):
     def __init__(self, minimap_shape=(7, 64, 64), screen_shape=(17, 64, 64)):
+        super().__init__()
         self.minimapRes = ResNet(minimap_shape[0], ResidualBlock, minimap_shape[1])
         self.screenRes = ResNet(screen_shape[0], ResidualBlock, screen_shape[1])
 
@@ -88,6 +89,7 @@ class SpatialResNet(nn.Module):
 
 class MemoryProcessing(nn.Module):
     def __init__(self, minimap_shape=(7, 64, 64), screen_shape=(17, 64, 64)):
+        super().__init__()
         self.SpatialResNet = SpatialResNet()
         self.ConvLSTM = ConvLSTM(input_channels=24, hidden_channels=[96], kernel_size=3)
 
@@ -100,6 +102,7 @@ class MemoryProcessing(nn.Module):
 
 class MLP(nn.Module):
     def __init__(self, in_channels):
+        super().__init__()
         self.mlp = torch.nn.Sequential(
           torch.nn.Linear(in_channels, 128),
           torch.nn.ReLU(),
@@ -113,50 +116,63 @@ class MLP(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-    def attention(q, k, v, d_k, mask=None, dropout=None):
-        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(d_k)
-        if mask is not None:
-            mask = mask.unsqueeze(1)
-            scores = scores.masked_fill(mask == 0, -1e9)
 
-        scores = F.softmax(scores, dim=-1)
-        if dropout is not None:
-            scores = dropout(scores)
-
-        output = torch.matmul(scores, v)
-        return output
-
-    def __init__(self, heads, d_model, num_blocks):
+    def __init__(self, heads = 1, num_blocks = 1, d_model=32):
         super().__init__()
 
-        # self.d_model = d_model
-        # self.d_k = d_model // heads
         self.h = heads
         self.memory = MemoryProcessing()
+        self.d_model = d_model
+        self.d_k = d_model // heads
+        self.q_embedding = nn.Linear(24, d_model)
+        self.k_embedding = nn.Linear(24, d_model)
+        self.v_embedding = nn.Linear(24, d_model)
         self.output_mlp = nn.Sequential(
-            nn.Linear(),
-            nn.ReLU,
-            nn.Linear()
+            nn.Linear(32, 384),
+            nn.ReLU(),
+            nn.Linear(384, 32)
         )
 
     def forward(self, minimap, screen):
         #batch_size = q.size(0)
 
         outputs3d = self.memory(minimap_shape=minimap.shape, screen_shape=screen.shape)[0]
-        # Perform linear operation on slit into h heads
+        # Perform linear operation on slit into h heads, embedding_size
+        # more detail http://jalammar.github.io/illustrated-transformer/
+
         k = copy.deepcopy(outputs3d)
         q = copy.deepcopy(outputs3d)
         v = copy.deepcopy(outputs3d)
 
+        # split into heads, shape:  Sequential_length * head * d_k
+        # in our case, should be shape (64, 1, 32)
+        k = self.q_embedding(k).view(-1, self.h, self.d_k)
+        q = self.q_embedding(q).view(-1, self.h, self.d_k)
+        v = self.q_embedding(v).view(-1, self.h, self.d_k)
+
+        # q, k be transposed into shape (h, sl, d_k)
+        q = q.transpose(0, 1)
+        k = k.transpose(0, 1)
+        v= v.transpose(0, 1)
+
         # Calculate attention
-        scores = self.attention(q, k, v, self.d_k)
+        # scores shape (head, sl, d_k), in our case (1, 64, 32)
+        scores = self.attention(q, k, v)
 
         # Concatenate heads and put through final linear layer
-        concat = scores.transpose(1, 2).contiguous().view(batch_size, -1, self.d_model)
+        # after concatenate have shape (sl, d_model)
+        concat = scores.transpose(0, 1).contiguous().view(-1, self.d_model)
         output = self.out(concat)
         return output
 
-
+    def attention(q, k, v, d_k = 32):
+        # matmul should be q in shape of (h, sl, dk), k.transpose in shape of (h, dk, sl)
+        # more details see https://medium.com/@kolloldas/building-the-mighty-transformer-for-sequence-tagging-in-pytorch-part-i-a1815655cd8
+        scores = torch.matmul(q, k.transpose(1, 2)) / math.sqrt(d_k)
+        scores = F.softmax(scores, dim=-1)
+        # scores have shape (h, sl, sl), in our case (1, 64, 64), v in shape (h, sl, d_k)
+        output = torch.matmul(scores, v)
+        return output
 
 
 class QLearner:
