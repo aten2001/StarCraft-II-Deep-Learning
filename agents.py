@@ -47,11 +47,13 @@ class SmartAgent(base_agent.BaseAgent):
     def step(self, obs):
         super(SmartAgent, self).step(obs)
 
-        pdb.set_trace()
+        # pdb.set_trace()
         # print(obs.observation['feature_minimap'].shape)
         # print(obs.observation['feature_screen'].shape)
         # print(obs.observation['last_actions'])
         # print(obs.observation['player'])
+        for action in obs.observation.available_actions:
+            print(actions.FUNCTIONS[action])
         (minimap, screen, player, last_action) = self.input_preprocessing(obs.observation)
         return actions.FUNCTIONS.no_op()
 

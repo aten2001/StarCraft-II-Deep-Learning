@@ -100,11 +100,11 @@ class MemoryProcessing(nn.Module):
 
 
 
-class MLP(nn.Module):
-    def __init__(self, in_channels):
+class Input2d(nn.Module):
+    def __init__(self):
         super().__init__()
         self.mlp = torch.nn.Sequential(
-          torch.nn.Linear(in_channels, 128),
+          torch.nn.Linear(12, 128),
           torch.nn.ReLU(),
           torch.nn.Linear(128, 64),
         )
@@ -173,6 +173,61 @@ class MultiHeadAttention(nn.Module):
         # scores have shape (h, sl, sl), in our case (1, 64, 64), v in shape (h, sl, d_k)
         output = torch.matmul(scores, v)
         return output
+
+
+class RelationalProcessing(nn.Module):
+    def __init__(self, heads = 1, num_blocks = 1, d_model=32):
+        super().__init__()
+        self.mhdpa = MultiHeadAttention(heads=heads, num_blocks = num_blocks, d_model = d_model)
+        self.max_pool_layer = nn.MaxPool1d(32)
+        self.mlp = nn.Sequential(
+            nn.Linear(64, 512),
+            nn.ReLU(),
+            nn.Linear(512, 512),
+        )
+
+    def forward(self, minimap, screen):
+        # output_mha has shape(64, 32)
+        output_mha = self.mhdpa(minimap, screen)
+        relational_spatial = output_mha.view(8, 8, -1)
+        output_mha = output_mha.view(1, 64, 32)
+        relational_nonspatial = self.max_pool_layer(output_mha).view(-1)
+        relational_nonspatial = self.mlp(relational_nonspatial)
+        return (relational_spatial, relational_nonspatial)
+
+class OutputProcessing(nn.Module):
+    def __init__(self, heads = 1, num_blocks = 1, d_model=32):
+        self.input2d_layer = Input2d()
+        self.relational_processing = RelationalProcessing(heads = heads, num_blocks = num_blocks, d_model=d_model)
+        self.policy_layer = nn.Sequential(
+            nn.Linear(576, 256),
+            nn.ReLU(),
+            nn.Linear(256, 549),
+        )
+        self.baseline = nn.Sequential(
+            nn.Linear(576, 256),
+            nn.ReLU(),
+            nn.Linear(256, 1),
+        )
+        self.embedding = nn.Liner(1, 16)
+        self.conv2dtranspose = nn.ConvTranspose2d(in_channels = 32, out_channels = 16, kernel_size = 4, stride = 2)
+
+    def forward(self, minimap, screen, player, last_action, available_actions):
+        input2d = self.input2d_layer(player, last_action)
+        (relational_spatial, relational_nonspatial) = self.relational_processing(minimap, screen)
+        shared_features = torch.cat(input2d, relational_nonspatial)
+        policy_logic = self.policy_layer(shared_features)
+        policy_logic = policy_logic[available_actions]
+        chosen_action = argmax(policy_logic)
+        # todo : embedding blablabla
+        self.conv2dtranspose(relational_spatial)
+
+
+
+
+
+
+
 
 
 class QLearner:
